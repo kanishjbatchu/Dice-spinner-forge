@@ -95,10 +95,10 @@
         <div class="group">
           <h3>Mechanism</h3>
           <div class="seg" id="mech">
-            <div class="chip active" data-mech="pip">Print-in-place</div>
-            <div class="chip" data-mech="bearing">Bearing seat</div>
+            <div class="chip active" data-mech="bearing">Bearing</div>
+            <div class="chip" data-mech="pip">Print-in-place</div>
           </div>
-          <p class="note" id="mechNote">Prints as one piece and spins straight off the bed — no bearing, no assembly. The center grip is captured with clearance gaps.</p>
+          <p class="note" id="mechNote">Realistic lobed body with a press-fit seat for your bearing. Press the bearing into the center after printing.</p>
         </div>
         <div class="group">
           <h3>Arms</h3>
@@ -111,20 +111,22 @@
           </div>
         </div>
         <div class="group">
-          <h3>Arms &amp; weights</h3>
+          <h3>Arms &amp; lobes</h3>
           <label class="row"><span class="lab">Arm length</span>
             <input type="range" id="sArm" min="16" max="45" step="1" value="26">
             <span class="val" id="sArmV">26</span></label>
-          <label class="row"><span class="lab">Arm width</span>
-            <input type="range" id="sArmW" min="6" max="22" step="1" value="12">
-            <span class="val" id="sArmWV">12</span></label>
-          <label class="row"><span class="lab">Cap Ø</span>
-            <input type="range" id="sCap" min="10" max="26" step="0.5" value="20">
-            <span class="val" id="sCapV">20</span></label>
-          <label class="checkrow"><input type="checkbox" id="sCapBore" checked>
-            <span>Bore the weight caps (for coins/bearings)</span></label>
+          <label class="row"><span class="lab" id="capLab">Lobe Ø</span>
+            <input type="range" id="sCap" min="10" max="30" step="0.5" value="22">
+            <span class="val" id="sCapV">22</span></label>
+          <div id="pipOnly" class="hidden">
+            <label class="row"><span class="lab">Arm width</span>
+              <input type="range" id="sArmW" min="6" max="22" step="1" value="12">
+              <span class="val" id="sArmWV">12</span></label>
+            <label class="checkrow"><input type="checkbox" id="sCapBore" checked>
+              <span>Bore the weight caps (for coins/bearings)</span></label>
+          </div>
         </div>
-        <div class="group" id="pipGroup">
+        <div class="group hidden" id="pipGroup">
           <h3>Center grip &amp; fit</h3>
           <label class="row"><span class="lab">Grip Ø</span>
             <input type="range" id="sGrip" min="8" max="18" step="0.5" value="12">
@@ -134,20 +136,25 @@
             <span class="val" id="sClearV">0.40</span></label>
           <p class="note">Clearance is the gap that lets it spin. 0.4 mm suits most printers. Too stiff? raise it. Wobbly? lower it. A quick twist frees it the first time.</p>
         </div>
-        <div class="group hidden" id="bearGroup">
+        <div class="group" id="bearGroup">
           <h3>Center bearing</h3>
-          <label class="row"><span class="lab">Bore Ø</span>
-            <input type="range" id="sBore" min="6" max="24" step="0.5" value="22">
-            <span class="val" id="sBoreV">22</span></label>
-          <label class="row"><span class="lab">Wall</span>
-            <input type="range" id="sWall" min="1.5" max="6" step="0.5" value="3">
-            <span class="val" id="sWallV">3</span></label>
-          <p class="note">22 mm = press-fit for a 608 skate bearing. Add a bearing + caps after printing.</p>
+          <label class="row"><span class="lab">Bearing Ø (OD)</span>
+            <input type="range" id="sBore" min="6" max="26" step="0.5" value="12">
+            <span class="val" id="sBoreV">12</span></label>
+          <p class="note">Center hole is a press-fit at this size (12 mm = your bearing). FDM holes print a hair small, so it grips; ream/sand if tight. Match <b>Body thickness</b> to the bearing's thickness for a flush fit.</p>
+          <label class="checkrow"><input type="checkbox" id="sDimples" checked>
+            <span>Recessed finger-grip dimples on lobes</span></label>
+          <label class="checkrow"><input type="checkbox" id="sCaps" checked>
+            <span>Include press-fit cap buttons (printed beside the body)</span></label>
+          <label class="row"><span class="lab">Bearing bore (ID)</span>
+            <input type="range" id="sCapID" min="3" max="11" step="0.5" value="8">
+            <span class="val" id="sCapIDV">8</span></label>
+          <p class="note">Caps press into the bearing's <b>inner</b> hole — set this to that diameter. (Default 8 mm is typical for a 12 mm bearing; 11 mm would leave almost no bearing, so double-check yours.)</p>
         </div>
         <div class="group">
           <h3>Thickness</h3>
           <label class="row"><span class="lab">Body (mm)</span>
-            <input type="range" id="sThick" min="5" max="10" step="0.5" value="7">
+            <input type="range" id="sThick" min="4" max="12" step="0.5" value="7">
             <span class="val" id="sThickV">7</span></label>
         </div>
       </div>
@@ -212,6 +219,7 @@ const grid = new THREE.GridHelper(200, 40, 0x2b3441, 0x1a202a); grid.position.y=
 
 const bodyMat = new THREE.MeshStandardMaterial({color:0xc0392b, roughness:0.45, metalness:0.1, flatShading:true});
 const markMat = new THREE.MeshStandardMaterial({color:0xf5f5f5, roughness:0.5, metalness:0.0, flatShading:true});
+const spinMat = new THREE.MeshStandardMaterial({color:0xc0392b, roughness:0.4, metalness:0.15, flatShading:false}); // smooth — rounded spinner edges
 
 let current = null, exportGeo = null, autoSpin = false;
 
@@ -276,6 +284,28 @@ function ring(outerR, innerR, thick, seg=64){
   const g=new THREE.ExtrudeGeometry(shape,{depth:thick,bevelEnabled:false,curveSegments:seg});
   g.rotateX(-Math.PI/2); return g;   // lies flat, spans y 0..thick
 }
+// Realistic fidget-spinner outline as a point loop: N rounded lobes (radius rLobe at distance armR)
+// joined by concave waists dipping to rNeck. Sampled as a smooth closed profile.
+function lobePts(N, armR, rLobe, rNeck){
+  const TWO=Math.PI*2, seg=Math.PI/N;
+  const dmax=Math.min(Math.asin(Math.min(0.999,rLobe/armR)), seg*0.9);   // where a ray goes tangent to a lobe
+  const rEdge=armR*Math.cos(dmax)+Math.sqrt(Math.max(0,rLobe*rLobe-armR*armR*Math.sin(dmax)*Math.sin(dmax)));
+  const samples=Math.max(280, N*96), pts=[];
+  for(let k=0;k<samples;k++){
+    const th=k/samples*TWO, segFull=TWO/N;
+    let d=th%segFull; if(d>segFull/2) d=segFull-d;   // angular distance to nearest lobe centre, 0..seg
+    let r;
+    if(d<=dmax){                                       // convex outer arc of the lobe
+      r=armR*Math.cos(d)+Math.sqrt(Math.max(0,rLobe*rLobe-armR*armR*Math.sin(d)*Math.sin(d)));
+    }else{                                             // concave waist, smooth dip to rNeck
+      const u=(d-dmax)/(seg-dmax), blend=(1-Math.cos(Math.PI*u))/2;
+      r=rEdge+(rNeck-rEdge)*blend;
+    }
+    pts.push(new THREE.Vector2(r*Math.cos(th), r*Math.sin(th)));
+  }
+  return pts;
+}
+function flipWinding(geo){ const idx=geo.index.array; for(let i=0;i<idx.length;i+=3){const m=idx[i+1];idx[i+1]=idx[i+2];idx[i+2]=m;} geo.index.needsUpdate=true; return geo; }
 
 let FONT=null;
 function numberGeo(str, size, depth){   // raised solid numeral, extrudes +Z
@@ -376,11 +406,13 @@ function buildEngravedGeometry(E, d, s){
 // drop the collapsed triangles welding leaves behind (an edge pinched to zero length).
 // These are redundant — the remaining tris already form the closed surface — so this stays watertight.
 function dropDegenerateTris(geo){
-  const idx=geo.index.array, keep=[];
-  for(let i=0;i<idx.length;i+=3){
-    const ia=idx[i],ib=idx[i+1],ic=idx[i+2];
-    if(ia===ib||ib===ic||ia===ic) continue;
-    keep.push(ia,ib,ic);
+  const pos=geo.attributes.position, keep=[];
+  const eq=(i,j)=>Math.abs(pos.getX(i)-pos.getX(j))<1e-6&&Math.abs(pos.getY(i)-pos.getY(j))<1e-6&&Math.abs(pos.getZ(i)-pos.getZ(j))<1e-6;
+  if(geo.index){
+    const idx=geo.index.array;
+    for(let i=0;i<idx.length;i+=3){const a=idx[i],b=idx[i+1],c=idx[i+2]; if(a===b||b===c||a===c||eq(a,b)||eq(b,c)||eq(a,c))continue; keep.push(a,b,c);}
+  }else{ // non-indexed (e.g. ExtrudeGeometry): add an index that skips collapsed tris, keeping the vertex/normal buffers
+    for(let i=0;i<pos.count;i+=3){const a=i,b=i+1,c=i+2; if(eq(a,b)||eq(b,c)||eq(a,c))continue; keep.push(a,b,c);}
   }
   geo.setIndex(keep);
   return geo;
@@ -444,22 +476,47 @@ function buildSpinnerPIP(s){
   setObject(grp, (capCenter+capOuter)*2);
 }
 
+// A two-piece press-fit cap: head you pinch + a small boss on the inner-race + a peg into the bore.
+// Printed head-down (smooth pinch face on the bed), peg pointing up.
+function makeCap(boreID, t){
+  const pegR=Math.max(1.2, boreID/2), headR=pegR+2.5, headH=2, bossH=0.6, pegLen=Math.max(2, t*0.45);
+  const head=cyl(headR, headH);                                   // y 0..headH (pinch face on bed)
+  const boss=cyl(pegR+1.2, bossH); boss.translate(0,headH,0);     // sits on the bearing's inner race
+  const peg=cyl(pegR, pegLen); peg.translate(0,headH+bossH,0);    // press-fits into the bore
+  return merge([head,boss,peg]);
+}
 function buildSpinnerBearing(s){
-  const t=s.thick, cOuter=s.bore/2+s.wall, cInner=s.bore/2;
-  const capOuter=s.cap/2, capInner=s.capBore? Math.min(s.cap/2-2,11):0;
-  const parts=[ ring(cOuter,cInner,t) ];
-  for(let i=0;i<s.arms;i++){
-    const ang=(i/s.arms)*Math.PI*2;
-    const len=s.armLen+capOuter*0.4;
-    const arm=new THREE.BoxGeometry(len,t,s.armW); arm.translate(len/2,t/2,0); arm.rotateY(-ang);
-    parts.push(arm);
-    const cap=ring(capOuter,capInner,t); cap.translate(Math.cos(ang)*s.armLen,0,Math.sin(ang)*s.armLen);
-    parts.push(cap);
-  }
-  exportGeo=merge(parts);
+  const N=s.arms, t=s.thick, holeR=s.bore/2, armR=s.armLen, rLobe=s.cap/2;   // bore = bearing OD, cap = lobe Ø
+  const rNeck=Math.max(holeR+3, armR*0.5);                                    // keep a solid hub around the bearing
+  const outline=ccw(lobePts(N, armR, rLobe, rNeck));
+  const hole=ccw(circlePts(0,0,holeR,48));
+  const dimR=Math.min(rLobe*0.55, 5), dimDepth=Math.min(t*0.4, 1.6);
+  const dims=[];
+  if(s.dimples) for(let i=0;i<N;i++){ const a=i*2*Math.PI/N; dims.push(ccw(circlePts(Math.cos(a)*armR, Math.sin(a)*armR, dimR, 30))); }
+
+  // hand-built watertight shell (XY plane, z 0..t), then rotate flat — lets the dimples be true blind recesses
+  const parts=[];
+  const topS=new THREE.Shape(outline); topS.holes.push(new THREE.Path(rev(hole))); dims.forEach(d=>topS.holes.push(new THREE.Path(rev(d))));
+  const top=new THREE.ShapeGeometry(topS); top.translate(0,0,t); parts.push(top);                 // top face (+Z), minus hole & dimples
+  const botS=new THREE.Shape(outline); botS.holes.push(new THREE.Path(rev(hole)));
+  parts.push(flipWinding(new THREE.ShapeGeometry(botS)));                                          // bottom face (−Z)
+  parts.push(wallBand(outline, t, 0, false));                                                      // outer wall (solid inside)
+  parts.push(wallBand(hole, t, 0, true));                                                          // center bearing-seat wall
+  for(const d of dims){ parts.push(wallBand(d, t, t-dimDepth, true)); const fl=new THREE.ShapeGeometry(new THREE.Shape(d)); fl.translate(0,0,t-dimDepth); parts.push(fl); }
+  let body=BGU.mergeVertices(posMerge(parts), 1e-4);
+  body=dropDegenerateTris(body); body.computeVertexNormals(); body.rotateX(-Math.PI/2);
+
+  exportGeo=body;
   const grp=new THREE.Group();
-  grp.add(new THREE.Mesh(exportGeo.clone(), bodyMat));
-  setObject(grp, (s.armLen+capOuter)*2);
+  grp.add(new THREE.Mesh(body, bodyMat));
+  if(s.caps){
+    const overallR=armR+rLobe, cap=makeCap(s.capID, t);
+    const caps=[ cap.clone().translate(overallR+10, 0, 0), cap.clone().translate(overallR+10+ s.capID+9, 0, 0) ];
+    const capGeo=merge(caps);
+    exportGeo=merge([body, capGeo]);        // body + 2 caps laid out beside it for printing
+    grp.add(new THREE.Mesh(capGeo, markMat));
+  }
+  setObject(grp, (armR+rLobe)*2);
 }
 
 /* ---------------- display ---------------- */
@@ -488,11 +545,12 @@ function frameCamera(){
 let mode='dice';
 const state={
   size:16, mark:'numbers', depth:1.2, markSize:0.62,
-  mech:'pip', arms:3, armLen:26, armW:12, cap:20, capBore:true, thick:7,
-  gripD:12, clear:0.4, bore:22, wall:3,
+  mech:'bearing', arms:3, armLen:26, armW:12, cap:22, capBore:true, thick:7,
+  gripD:12, clear:0.4, bore:12, wall:3, dimples:true, caps:true, capID:8,
 };
 function rebuild(){
   bodyMat.color.set(document.getElementById('bodyColor').value);
+  spinMat.color.set(document.getElementById('bodyColor').value);
   markMat.color.set(document.getElementById('markColor').value);
   const needFont = mode==='dice' && state.mark==='numbers';
   if(needFont && !FONT){ statusEl.textContent='Loading font…'; return; }
@@ -527,22 +585,27 @@ seg('#markType','mark',()=>{
 });
 seg('#armCount','arms');
 seg('#mech','mech',()=>{
-  document.getElementById('pipGroup').classList.toggle('hidden', state.mech!=='pip');
-  document.getElementById('bearGroup').classList.toggle('hidden', state.mech!=='bearing');
-  document.getElementById('mechNote').textContent = state.mech==='pip'
+  const pip = state.mech==='pip';
+  document.getElementById('pipGroup').classList.toggle('hidden', !pip);
+  document.getElementById('bearGroup').classList.toggle('hidden', pip);
+  document.getElementById('pipOnly').classList.toggle('hidden', !pip);
+  document.getElementById('capLab').textContent = pip ? 'Cap Ø' : 'Lobe Ø';
+  document.getElementById('mechNote').textContent = pip
     ? 'Prints as one piece and spins straight off the bed — no bearing, no assembly. The center grip is captured with clearance gaps.'
-    : 'A flat body with a press-fit seat for a 608 bearing. Smoothest spin, but you add a bearing + caps after printing.';
+    : 'Realistic lobed body with a press-fit seat for your bearing. Press the bearing into the center after printing.';
 });
 // sliders
 function slider(id,key,fmt){
-  const el=document.getElementById(id), out=document.getElementById(id+'V');
+  const el=document.getElementById(id); if(!el) return; const out=document.getElementById(id+'V');
   el.addEventListener('input',()=>{ state[key]=parseFloat(el.value); if(out)out.textContent=fmt?fmt(el.value):el.value; rebuild(); });
 }
 slider('dSize','size'); slider('dDepth','depth'); slider('dMarkSize','markSize');
 slider('sArm','armLen'); slider('sArmW','armW'); slider('sCap','cap'); slider('sThick','thick');
-slider('sGrip','gripD'); slider('sClear','clear',v=>(+v).toFixed(2)); slider('sBore','bore'); slider('sWall','wall');
+slider('sGrip','gripD'); slider('sClear','clear',v=>(+v).toFixed(2)); slider('sBore','bore'); slider('sCapID','capID');
 document.getElementById('sCapBore').onchange=e=>{ state.capBore=e.target.checked; rebuild(); };
-document.getElementById('bodyColor').oninput=e=>{ bodyMat.color.set(e.target.value); };
+document.getElementById('sDimples').onchange=e=>{ state.dimples=e.target.checked; rebuild(); };
+document.getElementById('sCaps').onchange=e=>{ state.caps=e.target.checked; rebuild(); };
+document.getElementById('bodyColor').oninput=e=>{ bodyMat.color.set(e.target.value); spinMat.color.set(e.target.value); };
 document.getElementById('markColor').oninput=e=>{ markMat.color.set(e.target.value); };
 document.getElementById('spin').onchange=e=>autoSpin=e.target.checked;
 document.getElementById('resetView').onclick=frameCamera;
