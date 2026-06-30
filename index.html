@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dice / Spinner Forge</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2b3441;
+    --txt:#e6edf3; --muted:#8b97a6; --accent:#5aa9ff; --accent2:#7ee787;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);overflow:hidden}
+  #app{display:flex;height:100%}
+  #panel{width:330px;min-width:330px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;height:100%}
+  #stage{flex:1;position:relative;min-width:0}
+  canvas{display:block}
+  header{padding:16px 18px 12px;border-bottom:1px solid var(--line)}
+  header h1{font-size:16px;margin:0;letter-spacing:.3px}
+  header p{margin:4px 0 0;font-size:11px;color:var(--muted)}
+  .tabs{display:flex;gap:6px;padding:12px 14px 0}
+  .tab{flex:1;padding:8px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);
+       border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;text-align:center;transition:.15s}
+  .tab.active{color:var(--txt);border-color:var(--accent);background:#1d2a3d}
+  .scroll{flex:1;overflow-y:auto;padding:14px}
+  .scroll::-webkit-scrollbar{width:8px}
+  .scroll::-webkit-scrollbar-thumb{background:#2b3441;border-radius:4px}
+  .group{margin-bottom:16px}
+  .group h3{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 8px}
+  label.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;font-size:13px}
+  label.row span.lab{color:var(--muted)}
+  input[type=range]{flex:1;accent-color:var(--accent)}
+  .val{font-variant-numeric:tabular-nums;min-width:46px;text-align:right;font-size:12px;color:var(--txt)}
+  .note{font-size:11px;color:var(--muted);margin:6px 0 0;line-height:1.45}
+  .chips,.seg{display:flex;gap:4px}
+  .seg .chip{flex:1;text-align:center}
+  .chip{padding:7px 10px;border:1px solid var(--line);background:var(--panel2);border-radius:7px;
+        cursor:pointer;font-size:12px;font-weight:600;color:var(--muted)}
+  .chip.active{border-color:var(--accent);color:var(--txt);background:#1d2a3d}
+  input[type=color]{width:38px;height:28px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px;cursor:pointer}
+  .checkrow{display:flex;align-items:center;gap:8px;font-size:13px;margin:8px 0;cursor:pointer}
+  footer{padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+  button.export{background:var(--accent);color:#04101f;border:none;border-radius:8px;padding:11px;
+        font-size:14px;font-weight:700;cursor:pointer;transition:.15s}
+  button.export:hover{filter:brightness(1.08)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px;font-size:12px;cursor:pointer}
+  .meta{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
+  #status{position:absolute;left:12px;bottom:12px;font-size:11px;color:var(--muted);background:rgba(0,0,0,.4);
+        padding:6px 10px;border-radius:6px;pointer-events:none}
+  #hint{position:absolute;right:12px;top:12px;font-size:11px;color:var(--muted);background:rgba(0,0,0,.35);padding:6px 10px;border-radius:6px}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="panel">
+    <header>
+      <h1>⚒︎ Dice / Spinner Forge</h1>
+      <p>Engraved d6 dice &amp; print-in-place spinners. Export a print-ready STL.</p>
+    </header>
+    <div class="tabs">
+      <div class="tab active" data-mode="dice">Die (d6)</div>
+      <div class="tab" data-mode="spinner">Spinner</div>
+    </div>
+    <div class="scroll">
+      <!-- ============ DICE ============ -->
+      <div id="diceControls">
+        <div class="group">
+          <h3>Cube size</h3>
+          <label class="row"><span class="lab">Edge (mm)</span>
+            <input type="range" id="dSize" min="10" max="40" step="1" value="16">
+            <span class="val" id="dSizeV">16</span></label>
+        </div>
+        <div class="group">
+          <h3>Markings</h3>
+          <div class="seg" id="markType">
+            <div class="chip active" data-mark="numbers">Numbers</div>
+            <div class="chip" data-mark="braille">Braille</div>
+          </div>
+          <p class="note" id="markNote">Engraved into all six faces, opposite faces summing to 7. Ink or paint the recesses for contrast.</p>
+        </div>
+        <div class="group">
+          <h3>Depth &amp; size</h3>
+          <label class="row"><span class="lab">Engrave depth</span>
+            <input type="range" id="dDepth" min="0.4" max="2.5" step="0.1" value="1.2">
+            <span class="val" id="dDepthV">1.2</span></label>
+          <label class="row"><span class="lab">Numeral size</span>
+            <input type="range" id="dMarkSize" min="0.4" max="0.9" step="0.01" value="0.62">
+            <span class="val" id="dMarkSizeV">0.62</span></label>
+        </div>
+      </div>
+
+      <!-- ============ SPINNER ============ -->
+      <div id="spinControls" class="hidden">
+        <div class="group">
+          <h3>Mechanism</h3>
+          <div class="seg" id="mech">
+            <div class="chip active" data-mech="pip">Print-in-place</div>
+            <div class="chip" data-mech="bearing">Bearing seat</div>
+          </div>
+          <p class="note" id="mechNote">Prints as one piece and spins straight off the bed — no bearing, no assembly. The center grip is captured with clearance gaps.</p>
+        </div>
+        <div class="group">
+          <h3>Arms</h3>
+          <div class="seg" id="armCount">
+            <div class="chip" data-arms="2">2</div>
+            <div class="chip active" data-arms="3">3</div>
+            <div class="chip" data-arms="4">4</div>
+            <div class="chip" data-arms="5">5</div>
+            <div class="chip" data-arms="6">6</div>
+          </div>
+        </div>
+        <div class="group">
+          <h3>Arms &amp; weights</h3>
+          <label class="row"><span class="lab">Arm length</span>
+            <input type="range" id="sArm" min="16" max="45" step="1" value="26">
+            <span class="val" id="sArmV">26</span></label>
+          <label class="row"><span class="lab">Arm width</span>
+            <input type="range" id="sArmW" min="6" max="22" step="1" value="12">
+            <span class="val" id="sArmWV">12</span></label>
+          <label class="row"><span class="lab">Cap Ø</span>
+            <input type="range" id="sCap" min="10" max="26" step="0.5" value="20">
+            <span class="val" id="sCapV">20</span></label>
+          <label class="checkrow"><input type="checkbox" id="sCapBore" checked>
+            <span>Bore the weight caps (for coins/bearings)</span></label>
+        </div>
+        <div class="group" id="pipGroup">
+          <h3>Center grip &amp; fit</h3>
+          <label class="row"><span class="lab">Grip Ø</span>
+            <input type="range" id="sGrip" min="8" max="18" step="0.5" value="12">
+            <span class="val" id="sGripV">12</span></label>
+          <label class="row"><span class="lab">Clearance</span>
+            <input type="range" id="sClear" min="0.2" max="0.7" step="0.05" value="0.4">
+            <span class="val" id="sClearV">0.40</span></label>
+          <p class="note">Clearance is the gap that lets it spin. 0.4 mm suits most printers. Too stiff? raise it. Wobbly? lower it. A quick twist frees it the first time.</p>
+        </div>
+        <div class="group hidden" id="bearGroup">
+          <h3>Center bearing</h3>
+          <label class="row"><span class="lab">Bore Ø</span>
+            <input type="range" id="sBore" min="6" max="24" step="0.5" value="22">
+            <span class="val" id="sBoreV">22</span></label>
+          <label class="row"><span class="lab">Wall</span>
+            <input type="range" id="sWall" min="1.5" max="6" step="0.5" value="3">
+            <span class="val" id="sWallV">3</span></label>
+          <p class="note">22 mm = press-fit for a 608 skate bearing. Add a bearing + caps after printing.</p>
+        </div>
+        <div class="group">
+          <h3>Thickness</h3>
+          <label class="row"><span class="lab">Body (mm)</span>
+            <input type="range" id="sThick" min="5" max="10" step="0.5" value="7">
+            <span class="val" id="sThickV">7</span></label>
+        </div>
+      </div>
+
+      <!-- ============ SHARED ============ -->
+      <div class="group">
+        <h3>Preview color</h3>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="color" id="bodyColor" value="#c0392b">
+          <input type="color" id="markColor" value="#f5f5f5">
+          <label class="checkrow" style="margin:0"><input type="checkbox" id="spin"> <span>Auto-spin</span></label>
+        </div>
+        <p class="note" id="colorNote">Body color &amp; numeral/grip color. (Both print as one object — color is preview only.)</p>
+      </div>
+    </div>
+    <footer>
+      <div class="meta"><span id="dimInfo">—</span><span id="triInfo">—</span></div>
+      <button class="export" id="exportBtn">⬇ Export STL</button>
+      <button class="ghost" id="resetView">Reset camera</button>
+    </footer>
+  </div>
+  <div id="stage">
+    <div id="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
+    <div id="status">Loading…</div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import * as BGU from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ---------------- scene ---------------- */
+const stage = document.getElementById('stage');
+const statusEl = document.getElementById('status');
+const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0b0e13');
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+camera.position.set(50,40,65);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x202830, 0.85));
+const key = new THREE.DirectionalLight(0xffffff, 1.1); key.position.set(40,80,50); scene.add(key);
+const fill = new THREE.DirectionalLight(0x88aaff, 0.4); fill.position.set(-50,20,-30); scene.add(fill);
+const grid = new THREE.GridHelper(200, 40, 0x2b3441, 0x1a202a); grid.position.y=-0.01; scene.add(grid);
+
+const bodyMat = new THREE.MeshStandardMaterial({color:0xc0392b, roughness:0.45, metalness:0.1, flatShading:true});
+const markMat = new THREE.MeshStandardMaterial({color:0xf5f5f5, roughness:0.5, metalness:0.0, flatShading:true});
+
+let current = null, exportGeo = null, autoSpin = false;
+
+function resize(){
+  const w=stage.clientWidth, h=stage.clientHeight;
+  renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+function animate(){
+  requestAnimationFrame(animate);
+  if(autoSpin && current) current.rotation.y += 0.008;
+  controls.update(); renderer.render(scene,camera);
+}
+
+/* ---------------- geometry helpers ---------------- */
+function sanitize(geo){
+  let g = geo.index ? geo.toNonIndexed() : geo.clone();
+  g.deleteAttribute('uv');
+  g.computeVertexNormals();
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', g.attributes.position.clone());
+  out.setAttribute('normal', g.attributes.normal.clone());
+  return out;
+}
+const merge = (arr) => BGU.mergeGeometries(arr.map(sanitize), false);
+
+// group triangles into polygon faces by shared normal
+function getFaces(geometry){
+  const g = geometry.index ? geometry.toNonIndexed() : geometry;
+  const pos = g.attributes.position, faces = [];
+  const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();
+  const n=new THREE.Vector3(),ab=new THREE.Vector3(),ac=new THREE.Vector3();
+  for(let i=0;i<pos.count;i+=3){
+    a.fromBufferAttribute(pos,i); b.fromBufferAttribute(pos,i+1); c.fromBufferAttribute(pos,i+2);
+    ab.subVectors(b,a); ac.subVectors(c,a); n.crossVectors(ab,ac).normalize();
+    const cen=a.clone().add(b).add(c).multiplyScalar(1/3);
+    let f=faces.find(f=>f.normal.dot(n)>0.8);
+    if(!f){ f={normal:n.clone(),pts:[]}; faces.push(f); }
+    f.pts.push(cen);
+  }
+  faces.forEach(f=>{
+    f.center=f.pts.reduce((s,p)=>s.add(p),new THREE.Vector3()).multiplyScalar(1/f.pts.length);
+    f.inradius=f.center.length();
+  });
+  return faces;
+}
+// place a flat (XY-plane, extruding +Z) geometry onto a face; sink overlaps it inward
+function placeOnFace(geo, face, sink){
+  const z=face.normal.clone().normalize();
+  let up=new THREE.Vector3(0,1,0);
+  if(Math.abs(z.dot(up))>0.95) up=new THREE.Vector3(1,0,0);
+  const x=new THREE.Vector3().crossVectors(up,z).normalize();
+  const y=new THREE.Vector3().crossVectors(z,x).normalize();
+  if(sink) geo.translate(0,0,-sink);
+  const m=new THREE.Matrix4().makeBasis(x,y,z); m.setPosition(face.center);
+  geo.applyMatrix4(m); return geo;
+}
+function cyl(r,h,seg=48){ const g=new THREE.CylinderGeometry(r,r,h,seg); g.translate(0,h/2,0); return g; }
+function ring(outerR, innerR, thick, seg=64){
+  const shape=new THREE.Shape(); shape.absarc(0,0,outerR,0,Math.PI*2,false);
+  if(innerR>0){ const hole=new THREE.Path(); hole.absarc(0,0,innerR,0,Math.PI*2,true); shape.holes.push(hole); }
+  const g=new THREE.ExtrudeGeometry(shape,{depth:thick,bevelEnabled:false,curveSegments:seg});
+  g.rotateX(-Math.PI/2); return g;   // lies flat, spans y 0..thick
+}
+
+let FONT=null;
+function numberGeo(str, size, depth){   // raised solid numeral, extrudes +Z
+  const g=new TextGeometry(str,{font:FONT,size,height:depth,curveSegments:5,bevelEnabled:false});
+  g.computeBoundingBox(); const bb=g.boundingBox;
+  g.translate(-(bb.max.x+bb.min.x)/2,-(bb.max.y+bb.min.y)/2,0); return g;
+}
+// Braille for digits 1–6 (= letters a–f). A cell is a 2×3 dot grid, positions:  1 4 / 2 5 / 3 6
+const BRAILLE = { 1:[1], 2:[1,2], 3:[1,4], 4:[1,4,5], 5:[1,5], 6:[1,2,4] };
+const BR_PITCH = 2.5, BR_R = 0.75;   // standard ~2.5 mm dot spacing, ~1.5 mm dots — fixed size, not scaled to the die
+function brailleDots(value){
+  return (BRAILLE[value]||[]).map(p=>{
+    const col = p<=3 ? -1 : 1, row=(p-1)%3;          // row 0 top, 1 middle, 2 bottom
+    return [ col*BR_PITCH/2, (1-row)*BR_PITCH ];       // centered on the face
+  });
+}
+function assignNumbers(faces){
+  faces.forEach(f=>f.num=null);
+  const N=faces.length; let lo=1, hi=N;
+  for(const f of faces){
+    if(f.num!==null) continue;
+    f.num=lo++;
+    let opp=null,best=-0.9;
+    for(const g of faces){ if(g.num!==null)continue; const d=g.normal.dot(f.normal); if(d<best){best=d;opp=g;} }
+    if(opp) opp.num=hi--;
+  }
+}
+
+/* ---- deterministic watertight engraving (no CSG) ----
+   Build the recess SURFACE directly and weld by position into one manifold:
+   • rim     = face square minus the mark (flat, at the surface, +out)
+   • wall     = the mark's outline swept inward to depth d
+   • floor    = the mark shape at depth d (+out)
+   • pillar   = counter islands (the hole in 6/8/9/0/4) kept at surface level     */
+function posOnly(g){
+  const h = g.index ? g.toNonIndexed() : g;
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', h.attributes.position.clone());
+  return out;
+}
+function posMerge(arr){ return BGU.mergeGeometries(arr.map(posOnly), false); }
+function circlePts(cx,cy,r,n){ const p=[]; for(let i=0;i<n;i++){ const a=i/n*Math.PI*2; p.push(new THREE.Vector2(cx+Math.cos(a)*r, cy+Math.sin(a)*r)); } return p; }
+function glyphContours(str,size){
+  const d0 = FONT.generateShapes(str,size)[0].extractPoints(10);   // single digit (1–6)
+  const xs=d0.shape, bb={mnx:1e9,mxx:-1e9,mny:1e9,mxy:-1e9};
+  xs.forEach(p=>{bb.mnx=Math.min(bb.mnx,p.x);bb.mxx=Math.max(bb.mxx,p.x);bb.mny=Math.min(bb.mny,p.y);bb.mxy=Math.max(bb.mxy,p.y);});
+  const ox=-(bb.mnx+bb.mxx)/2, oy=-(bb.mny+bb.mxy)/2, sh=p=>new THREE.Vector2(p.x+ox,p.y+oy);
+  return { outer: xs.map(sh), holes: d0.holes.map(h=>h.map(sh)) };
+}
+// closed polyline → vertical quad band between zTop and zBot. outward=true → faces away from polygon interior.
+function wallBand(points, zTop, zBot, outward){
+  const pos=[], N=points.length;
+  for(let i=0;i<N;i++){
+    const a=points[i], b=points[(i+1)%N];
+    const aT=[a.x,a.y,zTop], bT=[b.x,b.y,zTop], bB=[b.x,b.y,zBot], aB=[a.x,a.y,zBot];
+    if(outward) pos.push(...aT,...bT,...bB, ...aT,...bB,...aB);
+    else        pos.push(...aT,...bB,...bT, ...aT,...aB,...bB);
+  }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3)); return g;
+}
+function signedArea(pts){ let a=0; for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length]; a+=p.x*q.y-q.x*p.y;} return a/2; }
+const ccw = (pts)=> signedArea(pts)<0 ? pts.slice().reverse() : pts;     // force counter-clockwise
+const rev = (pts)=> pts.slice().reverse();
+function buildEngravedGeometry(E, d, s){
+  const faces=getFaces(new THREE.BoxGeometry(E,E,E)); assignNumbers(faces);
+  const hw=E/2, square=[new THREE.Vector2(-hw,-hw),new THREE.Vector2(hw,-hw),new THREE.Vector2(hw,hw),new THREE.Vector2(-hw,hw)];
+  const all=[];
+  // contours arrive CCW; a hole must wind CW; an outer wall (solid outside) uses outward=false,
+  // a pillar wall (solid inside, the counter of 4/6) uses outward=true.
+  const buildFace=(parts, outers, holesOf, dep)=>{
+    const rim=new THREE.Shape(square);
+    outers.forEach(o=>rim.holes.push(new THREE.Path(rev(o))));                   // one rim: square minus every mark
+    parts.push(new THREE.ShapeGeometry(rim));
+    outers.forEach((o,i)=>{
+      const hs=holesOf[i]||[];
+      const floor=new THREE.Shape(o); hs.forEach(h=>floor.holes.push(new THREE.Path(rev(h))));
+      const fg=new THREE.ShapeGeometry(floor); fg.translate(0,0,-dep); parts.push(fg);   // recess floor
+      parts.push(wallBand(o,0,-dep,true));                                               // outer wall (solid outside)
+      for(const h of hs){ parts.push(new THREE.ShapeGeometry(new THREE.Shape(h))); parts.push(wallBand(h,0,-dep,false)); } // pillar (solid inside)
+    });
+  };
+  for(const f of faces){
+    const parts=[];
+    if(s.mark==='braille'){
+      const outers=brailleDots(f.num).map(([x,y])=>ccw(circlePts(x,y,BR_R,22)));
+      buildFace(parts, outers, outers.map(()=>[]), Math.min(d,1.0));      // shallow round dots
+    }else{
+      const {outer,holes}=glyphContours(''+f.num, E*s.markSize*0.5);
+      buildFace(parts, [ccw(outer)], [holes.map(ccw)], d);
+    }
+    const g=posMerge(parts); placeOnFace(g,f,0); all.push(g);
+  }
+  let geo=BGU.mergeVertices(posMerge(all), 1e-4);   // weld every seam → watertight manifold
+  geo=dropDegenerateTris(geo);
+  geo.computeVertexNormals();
+  return geo;
+}
+// drop the collapsed triangles welding leaves behind (an edge pinched to zero length).
+// These are redundant — the remaining tris already form the closed surface — so this stays watertight.
+function dropDegenerateTris(geo){
+  const idx=geo.index.array, keep=[];
+  for(let i=0;i<idx.length;i+=3){
+    const ia=idx[i],ib=idx[i+1],ic=idx[i+2];
+    if(ia===ib||ib===ic||ia===ic) continue;
+    keep.push(ia,ib,ic);
+  }
+  geo.setIndex(keep);
+  return geo;
+}
+// preview-only contrast marks sitting at the recess floor (not exported)
+function previewDecals(E, d, s, faces){
+  const out=[];
+  if(s.mark==='braille'){
+    const dep=Math.min(d,1.0);
+    for(const f of faces) for(const [x,y] of brailleDots(f.num)){
+      const c=new THREE.CircleGeometry(BR_R*0.9,20); c.translate(x,y,0); out.push(placeOnFace(c,f,dep-0.05));
+    }
+  }else{
+    for(const f of faces){ const t=numberGeo(''+f.num, E*s.markSize*0.5, 0.2); t.translate(0,0,-0.2); out.push(placeOnFace(t,f,d-0.05)); }
+  }
+  return out.length ? merge(out) : new THREE.BufferGeometry();
+}
+
+/* ---------------- die builder ---------------- */
+function buildDice(s){
+  const E=s.size, grp=new THREE.Group();
+  const d=Math.min(s.depth, E/2-2);
+  exportGeo = buildEngravedGeometry(E, d, s);          // one watertight manifold solid
+  grp.add(new THREE.Mesh(exportGeo.clone(), bodyMat));
+  const pf=getFaces(new THREE.BoxGeometry(E,E,E)); assignNumbers(pf);
+  grp.add(new THREE.Mesh(previewDecals(E,d,s,pf), markMat)); // preview-only contrast marks
+  setObject(grp,E);
+}
+
+/* ---------------- spinner builders ---------------- */
+function buildSpinnerPIP(s){
+  const H=s.thick, tf=2.0, c=s.clear;
+  const Rpost=s.gripD/2, Rneck=Rpost+c, Rpocket=Rneck+2.2, Rflange=Rpocket-c, Rhub=Rpocket+2.0;
+  const capOuter=s.cap/2, capInner=s.capBore? Math.min(s.cap/2-2, 10):0;
+  const armInner=Rpocket+0.3, capCenter=s.armLen;
+
+  /* ---- rotor (spinning): hub rings + arms + weight caps ---- */
+  const rotor=[];
+  const rb=ring(Rhub,Rpocket,tf);                rb.translate(0,0,0);        rotor.push(rb);   // bottom counterbore
+  const rn=ring(Rhub,Rneck,H-2*tf);              rn.translate(0,tf,0);       rotor.push(rn);   // neck
+  const rt=ring(Rhub,Rpocket,tf);                rt.translate(0,H-tf,0);     rotor.push(rt);   // top counterbore
+  for(let i=0;i<s.arms;i++){
+    const ang=(i/s.arms)*Math.PI*2;
+    const len=(capCenter-armInner)+capOuter*0.4;
+    const arm=new THREE.BoxGeometry(len,H,s.armW); arm.translate(armInner+len/2,H/2,0); arm.rotateY(-ang);
+    rotor.push(arm);
+    const cap=ring(capOuter,capInner,H); cap.translate(Math.cos(ang)*capCenter,0,Math.sin(ang)*capCenter);
+    rotor.push(cap);
+  }
+  /* ---- grip (stationary): captured spool through the rotor ---- */
+  const grip=[];
+  grip.push(cyl(Rflange, tf-c).clone());                                   // bottom cap, y 0..tf-c (on bed)
+  const post=cyl(Rpost, (H-tf+c)-(tf-c)); post.translate(0,tf-c,0); grip.push(post);
+  const topCap=cyl(Rflange, tf-c); topCap.translate(0,H-tf+c,0); grip.push(topCap);  // top cap, ends flush at y=H
+
+  const rotorGeo=merge(rotor), gripGeo=merge(grip);
+  exportGeo=merge([rotorGeo, gripGeo]);
+  const grp=new THREE.Group();
+  grp.add(new THREE.Mesh(rotorGeo, bodyMat));
+  grp.add(new THREE.Mesh(gripGeo, markMat));
+  setObject(grp, (capCenter+capOuter)*2);
+}
+
+function buildSpinnerBearing(s){
+  const t=s.thick, cOuter=s.bore/2+s.wall, cInner=s.bore/2;
+  const capOuter=s.cap/2, capInner=s.capBore? Math.min(s.cap/2-2,11):0;
+  const parts=[ ring(cOuter,cInner,t) ];
+  for(let i=0;i<s.arms;i++){
+    const ang=(i/s.arms)*Math.PI*2;
+    const len=s.armLen+capOuter*0.4;
+    const arm=new THREE.BoxGeometry(len,t,s.armW); arm.translate(len/2,t/2,0); arm.rotateY(-ang);
+    parts.push(arm);
+    const cap=ring(capOuter,capInner,t); cap.translate(Math.cos(ang)*s.armLen,0,Math.sin(ang)*s.armLen);
+    parts.push(cap);
+  }
+  exportGeo=merge(parts);
+  const grp=new THREE.Group();
+  grp.add(new THREE.Mesh(exportGeo.clone(), bodyMat));
+  setObject(grp, (s.armLen+capOuter)*2);
+}
+
+/* ---------------- display ---------------- */
+function setObject(grp, sizeHint){
+  if(current){ scene.remove(current); current.traverse(o=>{if(o.geometry)o.geometry.dispose();}); }
+  current=grp;
+  const box=new THREE.Box3().setFromObject(grp), ctr=box.getCenter(new THREE.Vector3());
+  grp.position.x-=ctr.x; grp.position.z-=ctr.z; grp.position.y-=box.min.y;
+  scene.add(grp);
+  const sz=box.getSize(new THREE.Vector3());
+  document.getElementById('dimInfo').textContent=`${sz.x.toFixed(1)} × ${sz.y.toFixed(1)} × ${sz.z.toFixed(1)} mm`;
+  let tris=0; grp.traverse(o=>{if(o.geometry)tris+=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;});
+  document.getElementById('triInfo').textContent=`${Math.round(tris).toLocaleString()} tris`;
+  statusEl.textContent = mode==='dice' ? 'd6 ready' :
+    (state.mech==='pip' ? `${state.arms}-arm print-in-place spinner` : `${state.arms}-arm bearing spinner`);
+}
+function frameCamera(){
+  if(!current) return;
+  const box=new THREE.Box3().setFromObject(current);
+  const sz=box.getSize(new THREE.Vector3()).length(), ctr=box.getCenter(new THREE.Vector3());
+  controls.target.copy(ctr);
+  camera.position.copy(ctr).add(new THREE.Vector3(1,0.85,1.2).normalize().multiplyScalar(sz*1.45));
+}
+
+/* ---------------- state + UI ---------------- */
+let mode='dice';
+const state={
+  size:16, mark:'numbers', depth:1.2, markSize:0.62,
+  mech:'pip', arms:3, armLen:26, armW:12, cap:20, capBore:true, thick:7,
+  gripD:12, clear:0.4, bore:22, wall:3,
+};
+function rebuild(){
+  bodyMat.color.set(document.getElementById('bodyColor').value);
+  markMat.color.set(document.getElementById('markColor').value);
+  const needFont = mode==='dice' && state.mark==='numbers';
+  if(needFont && !FONT){ statusEl.textContent='Loading font…'; return; }
+  try{
+    if(mode==='dice') buildDice(state);
+    else if(state.mech==='pip') buildSpinnerPIP(state);
+    else buildSpinnerBearing(state);
+  }catch(e){ console.error(e); statusEl.textContent='Error: '+e.message; }
+}
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  mode=t.dataset.mode;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+  document.getElementById('diceControls').classList.toggle('hidden',mode!=='dice');
+  document.getElementById('spinControls').classList.toggle('hidden',mode!=='spinner');
+  rebuild(); frameCamera();
+});
+// segmented helpers
+function seg(sel, key, after){
+  document.querySelectorAll(sel+' .chip').forEach(c=>c.onclick=()=>{
+    const v=c.dataset[Object.keys(c.dataset)[0]];
+    state[key]= isNaN(+v)? v : +v;
+    document.querySelectorAll(sel+' .chip').forEach(x=>x.classList.toggle('active',x===c));
+    if(after) after(); rebuild();
+  });
+}
+seg('#markType','mark',()=>{
+  document.getElementById('markNote').textContent = state.mark==='braille'
+    ? 'Braille digits 1–6 (cells a–f), engraved into every face as tactile dots. Standard ~2.5 mm spacing, fixed size. Opposite faces sum to 7.'
+    : 'Engraved into all six faces, opposite faces summing to 7. Ink or paint the recesses for contrast.';
+});
+seg('#armCount','arms');
+seg('#mech','mech',()=>{
+  document.getElementById('pipGroup').classList.toggle('hidden', state.mech!=='pip');
+  document.getElementById('bearGroup').classList.toggle('hidden', state.mech!=='bearing');
+  document.getElementById('mechNote').textContent = state.mech==='pip'
+    ? 'Prints as one piece and spins straight off the bed — no bearing, no assembly. The center grip is captured with clearance gaps.'
+    : 'A flat body with a press-fit seat for a 608 bearing. Smoothest spin, but you add a bearing + caps after printing.';
+});
+// sliders
+function slider(id,key,fmt){
+  const el=document.getElementById(id), out=document.getElementById(id+'V');
+  el.addEventListener('input',()=>{ state[key]=parseFloat(el.value); if(out)out.textContent=fmt?fmt(el.value):el.value; rebuild(); });
+}
+slider('dSize','size'); slider('dDepth','depth'); slider('dMarkSize','markSize');
+slider('sArm','armLen'); slider('sArmW','armW'); slider('sCap','cap'); slider('sThick','thick');
+slider('sGrip','gripD'); slider('sClear','clear',v=>(+v).toFixed(2)); slider('sBore','bore'); slider('sWall','wall');
+document.getElementById('sCapBore').onchange=e=>{ state.capBore=e.target.checked; rebuild(); };
+document.getElementById('bodyColor').oninput=e=>{ bodyMat.color.set(e.target.value); };
+document.getElementById('markColor').oninput=e=>{ markMat.color.set(e.target.value); };
+document.getElementById('spin').onchange=e=>autoSpin=e.target.checked;
+document.getElementById('resetView').onclick=frameCamera;
+
+/* ---------------- export ---------------- */
+document.getElementById('exportBtn').onclick=()=>{
+  if(!exportGeo){ statusEl.textContent='Nothing to export'; return; }
+  const mesh=new THREE.Mesh(exportGeo); mesh.updateMatrixWorld(true);
+  const data=new STLExporter().parse(mesh,{binary:true});
+  const blob=new Blob([data],{type:'application/octet-stream'});
+  const name = mode==='dice'
+    ? `d6_${state.size}mm_engraved_${state.mark}.stl`
+    : (state.mech==='pip' ? `spinner_pip_${state.arms}arm.stl` : `spinner_bearing_${state.arms}arm.stl`);
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  URL.revokeObjectURL(a.href); statusEl.textContent='Exported '+name;
+};
+
+/* ---------------- boot ---------------- */
+resize(); animate();
+new FontLoader().load(
+  'https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json',
+  font=>{ FONT=font; rebuild(); frameCamera(); statusEl.textContent='Ready'; },
+  undefined,
+  ()=>{ statusEl.textContent='Font failed — numbers disabled, use pips'; rebuild(); frameCamera(); }
+);
+rebuild(); frameCamera();
+</script>
+</body>
+</html>
